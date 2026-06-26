@@ -19,8 +19,8 @@ async function main() {
   const cards = await Promise.all(
     modules.map(async (moduleEntry) => {
       try {
-        const manifest = await fetchJson(moduleEntry.manifest);
-        return renderModuleCard(moduleEntry, manifest);
+        const release = await fetchLatestRelease(moduleEntry);
+        return renderModuleCard(moduleEntry, release);
       } catch (error) {
         return renderModuleErrorCard(moduleEntry, error);
       }
@@ -30,10 +30,20 @@ async function main() {
   moduleGrid.replaceChildren(...cards);
 }
 
+async function fetchLatestRelease(moduleEntry) {
+  const repoName = moduleEntry.repoName || getRepoNameFromUrl(moduleEntry.repo);
+
+  if (!repoName) {
+    throw new Error("Missing repository name.");
+  }
+
+  return fetchJson(`https://api.github.com/repos/SamF111/${repoName}/releases/latest`);
+}
+
 async function fetchJson(url) {
   const response = await fetch(url, {
     headers: {
-      "Accept": "application/json"
+      Accept: "application/vnd.github+json"
     }
   });
 
@@ -44,15 +54,19 @@ async function fetchJson(url) {
   return response.json();
 }
 
-function renderModuleCard(moduleEntry, manifest) {
-  const title = manifest.title || moduleEntry.name || moduleEntry.id;
-  const description = manifest.description || moduleEntry.description || "No description provided.";
-  const version = manifest.version || "Unknown";
-  const compatibility = formatCompatibility(manifest.compatibility);
-  const manifestUrl = moduleEntry.manifest;
-  const downloadUrl = manifest.download || moduleEntry.download || "";
-  const repoUrl = moduleEntry.repo || manifest.url || "";
+function renderModuleCard(moduleEntry, release) {
+  const title = moduleEntry.name || moduleEntry.id || release.name || "Unnamed module";
+  const description = moduleEntry.description || "Foundry Virtual Tabletop module.";
+  const version = release.tag_name || "Unknown";
+  const compatibility = moduleEntry.compatibility || "See manifest";
   const status = moduleEntry.status || "stable";
+  const repoUrl = moduleEntry.repo || "";
+  const manifestUrl = moduleEntry.manifest || "";
+  const releaseUrl = release.html_url || `${repoUrl}/releases/latest`;
+  const zipAsset = findZipAsset(release.assets || []);
+  const zipDownloads = countZipDownloads(release.assets || []);
+  const publishedDate = formatDate(release.published_at);
+  const downloadUrl = zipAsset?.browser_download_url || releaseUrl;
 
   const card = document.createElement("article");
   card.className = "module-card";
@@ -69,19 +83,25 @@ function renderModuleCard(moduleEntry, manifest) {
 
   appendMeta(meta, "Version", version);
   appendMeta(meta, "Compatibility", compatibility);
+  appendMeta(meta, "Released", publishedDate);
+  appendMeta(meta, "ZIP downloads", String(zipDownloads));
   appendMeta(meta, "Status", status, `status status-${status}`);
 
   const actions = document.createElement("div");
   actions.className = "module-actions";
 
-  if (downloadUrl) {
-    actions.appendChild(createLinkButton("Download ZIP", downloadUrl, "button button-primary"));
-  }
+  actions.appendChild(createLinkButton("Download ZIP", downloadUrl, "button button-primary"));
 
-  actions.appendChild(createCopyButton("Copy Manifest URL", manifestUrl));
+  if (manifestUrl) {
+    actions.appendChild(createCopyButton("Copy Manifest URL", manifestUrl));
+  }
 
   if (repoUrl) {
     actions.appendChild(createLinkButton("GitHub", repoUrl, "button"));
+  }
+
+  if (releaseUrl) {
+    actions.appendChild(createLinkButton("Release Notes", releaseUrl, "button"));
   }
 
   card.append(heading, descriptionElement, meta, actions);
@@ -100,7 +120,7 @@ function renderModuleErrorCard(moduleEntry, error) {
 
   const description = document.createElement("p");
   description.className = "module-description";
-  description.textContent = "This module is listed, but its manifest could not be loaded.";
+  description.textContent = "This module is listed, but its latest GitHub release could not be loaded.";
 
   const message = document.createElement("p");
   message.className = "error-message";
@@ -192,32 +212,40 @@ function createCopyButton(label, value) {
   return button;
 }
 
-function formatCompatibility(compatibility) {
-  if (!compatibility || typeof compatibility !== "object") {
+function getRepoNameFromUrl(repoUrl) {
+  if (!repoUrl) {
+    return "";
+  }
+
+  try {
+    const url = new URL(repoUrl);
+    const parts = url.pathname.split("/").filter(Boolean);
+    return parts[1] || "";
+  } catch {
+    return "";
+  }
+}
+
+function findZipAsset(assets) {
+  return assets.find((asset) => asset.name && asset.name.toLowerCase().endsWith(".zip")) || null;
+}
+
+function countZipDownloads(assets) {
+  return assets
+    .filter((asset) => asset.name && asset.name.toLowerCase().endsWith(".zip"))
+    .reduce((total, asset) => total + Number(asset.download_count || 0), 0);
+}
+
+function formatDate(value) {
+  if (!value) {
     return "Unknown";
   }
 
-  const minimum = compatibility.minimum || "";
-  const verified = compatibility.verified || "";
-  const maximum = compatibility.maximum || "";
-
-  if (minimum && verified && maximum) {
-    return `${minimum}–${maximum}, verified ${verified}`;
-  }
-
-  if (minimum && verified) {
-    return `${minimum}+, verified ${verified}`;
-  }
-
-  if (verified) {
-    return `Verified ${verified}`;
-  }
-
-  if (minimum) {
-    return `${minimum}+`;
-  }
-
-  return "Unknown";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  }).format(new Date(value));
 }
 
 function renderFatalError(error) {
