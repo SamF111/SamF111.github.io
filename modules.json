@@ -3,6 +3,7 @@
     "id": "fxbus",
     "name": "FX Bus",
     "repo": "https://github.com/SamF111/fxbus",
+    "repoName": "fxbus",
     "manifest": "https://github.com/SamF111/fxbus/releases/latest/download/module.json",
     "status": "stable"
   },
@@ -10,13 +11,15 @@
     "id": "idle-token-animation",
     "name": "Idle Token Animation",
     "repo": "https://github.com/SamF111/idle-token-animation",
+    "repoName": "idle-token-animation",
     "manifest": "https://github.com/SamF111/idle-token-animation/releases/latest/download/module.json",
     "status": "stable"
   },
   {
     "id": "scene-initialiser",
-    "name": "Scene Initialiser",
+    "name": "Scene Initialisation",
     "repo": "https://github.com/SamF111/scene-initialiser",
+    "repoName": "scene-initialiser",
     "manifest": "https://github.com/SamF111/scene-initialiser/releases/latest/download/module.json",
     "status": "stable"
   }
