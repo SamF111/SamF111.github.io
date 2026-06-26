@@ -14,10 +14,10 @@
     "status": "stable"
   },
   {
-    "id": "scene-initialisation",
-    "name": "Scene Initialisation",
-    "repo": "https://github.com/SamF111/scene-initialisation",
-    "manifest": "https://github.com/SamF111/scene-initialisation/releases/latest/download/module.json",
+    "id": "scene-initialiser",
+    "name": "Scene Initialiser",
+    "repo": "https://github.com/SamF111/scene-initialiser",
+    "manifest": "https://github.com/SamF111/scene-initialiser/releases/latest/download/module.json",
     "status": "stable"
   }
 ]
