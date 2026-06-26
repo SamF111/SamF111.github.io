@@ -216,3 +216,11 @@ a:focus {
     width: 100%;
   }
 }
+
+.module-description p {
+  margin: 0 0 0.7rem;
+}
+
+.module-description p:last-child {
+  margin-bottom: 0;
+}
