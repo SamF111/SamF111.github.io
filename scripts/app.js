@@ -57,7 +57,7 @@ async function fetchManifestAtRef(owner, repoName, ref) {
 
   const response = await fetch(url, {
     headers: {
-      Accept: "application/vnd.github.raw+json"
+      Accept: "application/vnd.github.raw"
     }
   });
 
@@ -65,16 +65,8 @@ async function fetchManifestAtRef(owner, repoName, ref) {
     throw new Error(`Failed to load module.json for ${repoName}@${ref}: HTTP ${response.status}`);
   }
 
-  const text = await response.text();
-
   try {
-    const parsed = JSON.parse(text);
-
-    if (parsed && parsed.encoding === "base64" && parsed.content) {
-      return JSON.parse(decodeBase64(parsed.content));
-    }
-
-    return parsed;
+    return await response.json();
   } catch (error) {
     throw new Error(`Invalid module.json for ${repoName}@${ref}: ${error.message}`);
   }
@@ -104,7 +96,7 @@ function renderModuleCard(moduleEntry, release, manifest) {
   const manifestUrl = moduleEntry.manifest || "";
   const releaseUrl = release.html_url || `${repoUrl}/releases/latest`;
   const zipAsset = findZipAsset(release.assets || []);
-  const zipDownloads = countZipDownloads(release.assets || []);
+  const latestVersionDownloads = countZipDownloads(release.assets || []);
   const publishedDate = formatDate(release.published_at);
   const downloadUrl = manifest.download || zipAsset?.browser_download_url || releaseUrl;
 
@@ -114,9 +106,9 @@ function renderModuleCard(moduleEntry, release, manifest) {
   const heading = document.createElement("h2");
   heading.textContent = title;
 
-  const descriptionElement = document.createElement("p");
+  const descriptionElement = document.createElement("div");
   descriptionElement.className = "module-description";
-  descriptionElement.textContent = description;
+  renderSafeHtml(descriptionElement, description);
 
   const meta = document.createElement("dl");
   meta.className = "module-meta";
@@ -124,7 +116,7 @@ function renderModuleCard(moduleEntry, release, manifest) {
   appendMeta(meta, "Version", version);
   appendMeta(meta, "Compatibility", compatibility);
   appendMeta(meta, "Released", publishedDate);
-  appendMeta(meta, "ZIP downloads", String(zipDownloads));
+  appendMeta(meta, "Latest version downloads", String(latestVersionDownloads));
   appendMeta(meta, "Status", status, `status status-${status}`);
 
   const actions = document.createElement("div");
@@ -348,10 +340,61 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
-function decodeBase64(value) {
-  const binary = atob(value.replace(/\s/g, ""));
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  return new TextDecoder("utf-8").decode(bytes);
+function renderSafeHtml(target, html) {
+  const allowedTags = new Set([
+    "A",
+    "B",
+    "BR",
+    "CODE",
+    "EM",
+    "I",
+    "LI",
+    "OL",
+    "P",
+    "STRONG",
+    "UL"
+  ]);
+
+  const template = document.createElement("template");
+  template.innerHTML = html;
+
+  target.replaceChildren(cleanNode(template.content, allowedTags));
+}
+
+function cleanNode(node, allowedTags) {
+  const fragment = document.createDocumentFragment();
+
+  node.childNodes.forEach((child) => {
+    if (child.nodeType === Node.TEXT_NODE) {
+      fragment.appendChild(document.createTextNode(child.textContent || ""));
+      return;
+    }
+
+    if (child.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+
+    if (!allowedTags.has(child.tagName)) {
+      fragment.appendChild(cleanNode(child, allowedTags));
+      return;
+    }
+
+    const clone = document.createElement(child.tagName.toLowerCase());
+
+    if (child.tagName === "A") {
+      const href = child.getAttribute("href") || "";
+
+      if (href.startsWith("https://") || href.startsWith("http://")) {
+        clone.setAttribute("href", href);
+        clone.setAttribute("rel", "noopener noreferrer");
+      }
+    }
+
+    clone.appendChild(cleanNode(child, allowedTags));
+    fragment.appendChild(clone);
+  });
+
+  return fragment;
 }
 
 function renderFatalError(error) {
